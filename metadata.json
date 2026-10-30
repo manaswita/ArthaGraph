@@ -1,0 +1,6 @@
+{
+  "name": "ArthaGraph - Indian Stock Market Intelligence Agent",
+  "description": "An autonomous LangGraph-powered Indian Stock Market Intelligence Agent that scans NSE equities, analyzes market regime & sector momentum, identifies high-probability short-term swing opportunities, and generates institutional entry, target, and stop-loss roadmaps.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
