@@ -45,7 +45,8 @@ app.get('/api/stocks', (req: Request, res: Response) => {
 app.post('/api/run-langgraph-scan', async (req: Request, res: Response) => {
   try {
     const mode = req.body.mode || 'BALANCED';
-    const result = await runStockIntelligenceScan(mode);
+    const horizon = req.body.horizon || 'SWING';
+    const result = await runStockIntelligenceScan(mode, horizon);
     res.json(result);
   } catch (error: any) {
     console.error('Scan API error:', error);
@@ -62,10 +63,12 @@ app.post('/api/analyze-stock/:symbol', async (req: Request, res: Response) => {
       return res.status(404).json({ error: `Stock ${symbol} not found in NSE universe` });
     }
 
+    const horizon = req.body.horizon || 'SWING';
     const opportunity = await synthesizeStockOpportunityWithGemini(
       stock, 
       req.body.setupType || 'Momentum Breakout', 
-      CURRENT_MARKET_REGIME
+      CURRENT_MARKET_REGIME,
+      horizon
     );
 
     res.json(opportunity);

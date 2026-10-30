@@ -5,14 +5,16 @@ import {
   ShieldCheck, 
   TrendingUp, 
   CheckCircle2,
-  Info,
-  Layers,
-  Activity,
-  Flame,
-  ArrowDownCircle,
-  Truck,
+  Info, 
+  Layers, 
+  Activity, 
+  Flame, 
+  ArrowDownCircle, 
+  Truck, 
   HelpCircle,
-  ChevronDown,
+  Clock,
+  Calendar,
+  ChevronDown, 
   ChevronUp
 } from 'lucide-react';
 
@@ -86,9 +88,152 @@ export const AgentGuideTab: React.FC = () => {
     }
   ];
 
+  const horizons = [
+    {
+      id: 'SWING',
+      icon: '⚡',
+      name: 'Swing Trading',
+      timeframe: '3 – 8 Trading Days',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      summary: 'Captures short-term momentum expansions and 20 EMA mean-reversions with strict risk management.',
+      targets: 'T1: +6% to +9% | T2: +10% to +14%',
+      stopLoss: '1.5x ATR (Tight stop below 20 EMA or swing low)',
+      trailingRule: 'Once Target 1 is hit, revise stop-loss to entry price (breakeven) and trail daily lows under 9 EMA.',
+      suitability: 'Active swing traders seeking swift capital rotation and compounding across volatile weekly cycles.'
+    },
+    {
+      id: 'SHORT_TERM',
+      icon: '📈',
+      name: 'Short Term Positional',
+      timeframe: '4 – 12 Weeks (1 – 3 Months)',
+      badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
+      summary: 'Rides sustained multi-week sectoral trend waves and cup-and-handle continuations backed by 50 EMA support.',
+      targets: 'T1: +12% to +18% | T2: +20% to +28%',
+      stopLoss: '2.2x ATR (Anchored comfortably below rising 50 EMA)',
+      trailingRule: 'Once Target 1 is achieved, trail stop-loss under previous swing low and 20-Day EMA on daily close.',
+      suitability: 'Positional traders and working professionals who want sizeable trending gains without intraday stress.'
+    },
+    {
+      id: 'LONG_TERM',
+      icon: '💎',
+      name: 'Long Term Compounding',
+      timeframe: '6 – 18+ Months',
+      badgeColor: 'bg-purple-100 text-purple-800 border-purple-200',
+      summary: 'High-conviction compounding in market leaders with massive delivery accumulation (>60%) anchored above the 200 EMA.',
+      targets: 'T1: +35% to +45% | T2: +60% to +85%+',
+      stopLoss: '3.5x ATR (Cushioned 4% below rising 200 EMA / 50-Week EMA)',
+      trailingRule: 'Quarterly review; trail stop-loss under the rising 200-Day EMA as the long-term wealth thesis matures.',
+      suitability: 'Wealth builders and serious investors targeting multi-bagger upside with minimal portfolio turnover.'
+    }
+  ];
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto animate-fade-in">
-      {/* 1. Core Explanation Section: The 4 Scan Setups */}
+      {/* 1. NEW DEDICATED SECTION: The 3 Investment Horizons */}
+      <div className="bg-white border border-blue-200 rounded-2xl p-6 sm:p-7 shadow-xs space-y-5">
+        <div className="flex items-start gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+            <Clock className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700 font-mono">
+              Horizon Methodology
+            </span>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              The 3 Investment Horizons: Swing vs Short Term vs Long Term
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 mt-1">
+              Selecting your investment horizon automatically recalibrates the screening engine, stop-loss distance, and target roadmaps:
+            </p>
+          </div>
+        </div>
+
+        {/* 3 Horizon Detailed Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {horizons.map((h) => (
+            <div 
+              key={h.id}
+              className="p-4 rounded-xl border border-blue-100 bg-blue-50/30 flex flex-col justify-between space-y-3"
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-900 text-sm">
+                    <span className="text-base">{h.icon}</span>
+                    <span>{h.name}</span>
+                  </div>
+                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${h.badgeColor}`}>
+                    {h.timeframe}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {h.summary}
+                </p>
+              </div>
+
+              <div className="space-y-1.5 text-[11px] pt-2 border-t border-blue-100">
+                <div className="text-slate-700">
+                  <b className="text-slate-900 font-mono">Targets:</b> {h.targets}
+                </div>
+                <div className="text-slate-700">
+                  <b className="text-slate-900 font-mono">Stop-Loss:</b> {h.stopLoss}
+                </div>
+                <div className="text-slate-700">
+                  <b className="text-slate-900 font-mono">Trailing Rule:</b> {h.trailingRule}
+                </div>
+                <div className="p-2 bg-white rounded-lg border border-blue-100 font-medium text-blue-900 mt-1">
+                  🎯 <strong>Suitability:</strong> {h.suitability}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Quick Comparative Matrix */}
+        <div className="overflow-x-auto rounded-xl border border-blue-100">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-blue-50/70 border-b border-blue-100 text-slate-700 font-mono text-[11px] uppercase">
+              <tr>
+                <th className="p-3">Horizon Option</th>
+                <th className="p-3">Holding Period</th>
+                <th className="p-3">Stop-Loss Formula</th>
+                <th className="p-3">Target Multipliers</th>
+                <th className="p-3">Key Technical Anchor</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-blue-50 text-slate-700 font-sans">
+              <tr className="hover:bg-blue-50/30">
+                <td className="p-3 font-bold text-emerald-800 flex items-center gap-1.5">
+                  <span>⚡</span> Swing
+                </td>
+                <td className="p-3 font-mono">3–8 Days</td>
+                <td className="p-3 font-mono">1.5 × ATR (Tight)</td>
+                <td className="p-3 font-mono text-emerald-700 font-semibold">+6% / +12%</td>
+                <td className="p-3">20 EMA & Volume (1.8x+)</td>
+              </tr>
+              <tr className="hover:bg-blue-50/30">
+                <td className="p-3 font-bold text-amber-800 flex items-center gap-1.5">
+                  <span>📈</span> Short Term
+                </td>
+                <td className="p-3 font-mono">4–12 Weeks</td>
+                <td className="p-3 font-mono">2.2 × ATR / 50 EMA</td>
+                <td className="p-3 font-mono text-amber-700 font-semibold">+12% / +25%</td>
+                <td className="p-3">50 EMA & Sector Rotation</td>
+              </tr>
+              <tr className="hover:bg-blue-50/30">
+                <td className="p-3 font-bold text-purple-800 flex items-center gap-1.5">
+                  <span>💎</span> Long Term
+                </td>
+                <td className="p-3 font-mono">6–18+ Months</td>
+                <td className="p-3 font-mono">3.5 × ATR / 200 EMA</td>
+                <td className="p-3 font-mono text-purple-700 font-semibold">+35% / +70%+</td>
+                <td className="p-3">200 EMA & Delivery (&gt;60%)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 2. Core Explanation Section: The 4 Scan Setups */}
       <div className="bg-white border border-blue-100 rounded-2xl p-6 sm:p-7 shadow-xs">
         <div className="flex items-start gap-3.5 mb-2">
           <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
@@ -201,6 +346,14 @@ export const AgentGuideTab: React.FC = () => {
             <p className="text-slate-700">
               The full explanation of the 4 scan setups (Balanced, Volume Breakouts, 20 EMA Dips, High Delivery), trading discipline rules (1:2+ R:R, gap-up caveats), and how the agent operates.
             </p>
+          </div>
+        </div>
+
+        {/* README Quick Notice */}
+        <div className="mt-4 p-3.5 bg-blue-100/60 rounded-xl border border-blue-200 text-xs text-blue-950 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-blue-900 font-mono">📄 README.md Available:</span>
+            <span>Complete Functional and Technical documentation has been generated in the project root.</span>
           </div>
         </div>
       </div>

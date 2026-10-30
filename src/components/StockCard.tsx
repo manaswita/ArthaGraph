@@ -30,7 +30,7 @@ export const StockCard: React.FC<StockCardProps> = ({ stock, onOpenCalculator, o
     const text = `
 🎯 INDIAN STOCK MARKET INTELLIGENCE: ${stock.symbol} (${stock.name})
 Sector: ${stock.sector} | CMP: ₹${stock.cmp} (${stock.changePercent > 0 ? '+' : ''}${stock.changePercent}%)
-Confidence: ${stock.confidencePercent}% | Setup: ${stock.setupType}
+Horizon: ${stock.horizon || 'SWING'} | Confidence: ${stock.confidencePercent}% | Setup: ${stock.setupType}
 
 📌 WHY SELECTED:
 ${stock.selectionReason}
@@ -69,12 +69,21 @@ ${stock.supportingEvidence.map(e => `✓ ${e}`).join('\n')}
             {stock.symbol.slice(0, 2)}
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
                 {stock.symbol}
               </h3>
               <span className="text-[11px] px-2.5 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700 border border-blue-200">
                 {stock.setupType}
+              </span>
+              <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold border ${
+                stock.horizon === 'LONG_TERM'
+                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                  : stock.horizon === 'SHORT_TERM'
+                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              }`}>
+                {stock.horizon === 'LONG_TERM' ? '💎 Long Term' : stock.horizon === 'SHORT_TERM' ? '📈 Short Term' : '⚡ Swing'}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">

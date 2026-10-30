@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { StockQuote, StockOpportunity, MarketRegimeState, TargetScenario } from '../types/stock';
+import { StockQuote, StockOpportunity, MarketRegimeState, TargetScenario, InvestmentHorizon } from '../types/stock';
 import { generateChartBars } from './marketData';
 
 function getAiClient(): GoogleGenAI | null {
@@ -21,52 +21,90 @@ function getAiClient(): GoogleGenAI | null {
 export async function synthesizeStockOpportunityWithGemini(
   stock: StockQuote,
   setupType: StockOpportunity['setupType'],
-  marketRegime: MarketRegimeState
+  marketRegime: MarketRegimeState,
+  horizon: InvestmentHorizon = 'SWING'
 ): Promise<StockOpportunity> {
   const ai = getAiClient();
   const chart = generateChartBars(stock.cmp, stock.atr14, 20);
 
-  // Target & SL Calculations based on ATR and Structure
+  // Target & SL Calculations tailored dynamically to Investment Horizon:
+  // SWING: 1.5x ATR stop, 2.0x / 3.4x R:R, 3-8 trading days
+  // SHORT_TERM: 2.2x ATR stop (or 50 EMA buffer), 3.0x / 5.0x R:R, 1-3 months
+  // LONG_TERM: 3.5x ATR stop (or 200 EMA buffer), 4.5x / 8.0x R:R, 6-18+ months
   const atr = stock.atr14;
-  const hardSL = Math.round((stock.cmp - (atr * 1.5)) * 10) / 10;
+
+  let hardSL: number;
+  let t1Multiplier: number;
+  let t2Multiplier: number;
+  let defaultHolding: string;
+  let trailingRule: string;
+
+  if (horizon === 'LONG_TERM') {
+    hardSL = Math.round(Math.min(stock.cmp - (atr * 3.5), stock.ema200 * 0.96) * 10) / 10;
+    t1Multiplier = 3.5;
+    t2Multiplier = 7.0;
+    defaultHolding = '6 - 18+ Months (Long Term Wealth Compounding)';
+    trailingRule = 'Quarterly revision; trail stop-loss under rising 50-week / 200-day EMA as compounding thesis plays out.';
+  } else if (horizon === 'SHORT_TERM') {
+    hardSL = Math.round(Math.min(stock.cmp - (atr * 2.2), stock.ema50 * 0.98) * 10) / 10;
+    t1Multiplier = 2.5;
+    t2Multiplier = 4.5;
+    defaultHolding = '4 - 12 Weeks (Short Term Positional Swing)';
+    trailingRule = 'Once T1 is achieved, trail under previous swing low and 20-Day EMA on daily close.';
+  } else {
+    // SWING
+    hardSL = Math.round((stock.cmp - (atr * 1.5)) * 10) / 10;
+    t1Multiplier = 2.0;
+    t2Multiplier = 3.4;
+    defaultHolding = '3 - 8 Trading Days (Tactical Swing)';
+    trailingRule = 'Once T1 is achieved, revise trailing stop to cost (₹' + stock.cmp + ') and trail daily low under 9 EMA.';
+  }
+
   const slPct = Math.round(((stock.cmp - hardSL) / stock.cmp) * 1000) / 10;
-  
   const riskAmount = stock.cmp - hardSL;
-  const t1 = Math.round((stock.cmp + (riskAmount * 2.0)) * 10) / 10;
+  
+  const t1 = Math.round((stock.cmp + (riskAmount * t1Multiplier)) * 10) / 10;
   const t1GainPct = Math.round(((t1 - stock.cmp) / stock.cmp) * 1000) / 10;
   
-  const t2 = Math.round((stock.cmp + (riskAmount * 3.4)) * 10) / 10;
+  const t2 = Math.round((stock.cmp + (riskAmount * t2Multiplier)) * 10) / 10;
   const t2GainPct = Math.round(((t2 - stock.cmp) / stock.cmp) * 1000) / 10;
 
-  const riskReward = `1 : ${(t1GainPct / slPct).toFixed(1)}`;
+  const riskReward = `1 : ${(t1GainPct / Math.max(0.1, slPct)).toFixed(1)}`;
 
   const fallbackOpportunity: StockOpportunity = {
-    id: `opp-${stock.symbol}-${Date.now()}`,
+    id: `opp-${stock.symbol}-${horizon}-${Date.now()}`,
     symbol: stock.symbol,
     name: stock.name,
     sector: stock.sector,
     cmp: stock.cmp,
     changePercent: stock.changePercent,
     setupType,
-    selectionReason: `${stock.name} demonstrates high relative strength (${stock.changePercent > 0 ? '+' : ''}${stock.changePercent}%) within ${stock.sector}, outperforming benchmark Nifty. Volume expanded to ${stock.volumeMultiple}x its 20-day average with ${stock.deliveryPercent}% delivery mark, confirming institutional accumulation. Price is trading firmly above rising 20 EMA (₹${stock.ema20}) with RSI at ${stock.rsi14}, signaling sustainable swing momentum.`,
+    horizon,
+    selectionReason: `${stock.name} was selected for ${horizon.replace('_', ' ')} allocation due to outstanding relative strength (${stock.changePercent > 0 ? '+' : ''}${stock.changePercent}%) in ${stock.sector}. High delivery accumulation (${stock.deliveryPercent}%) confirms strong institutional backing, with price trading above key rising moving averages (20 EMA: ₹${stock.ema20}, 50 EMA: ₹${stock.ema50}).`,
     entryConditions: [
-      `Primary Trigger: Buy zone on 15-minute pullback between ₹${Math.round(stock.cmp * 0.993)} - ₹${stock.cmp}`,
-      `Breakout Trigger: Bullish candle close above ₹${stock.high} with 5-minute volume > 35,000 shares`,
-      `Safety Condition: Do not chase if stock opens gap-up > 1.8% above previous close`
+      horizon === 'LONG_TERM' 
+        ? `Primary Trigger: Systematic accumulation on any market dip near 20 EMA (₹${stock.ema20}) - 50 EMA (₹${stock.ema50})`
+        : `Primary Trigger: Buy zone on 15-minute pullback between ₹${Math.round(stock.cmp * 0.993)} - ₹${stock.cmp}`,
+      `Breakout Trigger: Bullish close above ₹${stock.high} with confirmed volume expansion`,
+      `Safety Condition: Do not chase if opening gap-up exceeds 1.8% from previous close`
     ],
     targetsAndStopLoss: {
       t1,
       t1GainPct,
-      t1Rationale: `Immediate resistance at recent pivot high / 2x ATR expansion target.`,
+      t1Rationale: horizon === 'LONG_TERM' 
+        ? `First structural target based on annual earnings expansion and multi-quarter channel resistance.`
+        : `Immediate resistance at recent pivot high / ${t1Multiplier}x risk expansion target.`,
       t2,
       t2GainPct,
-      t2Rationale: `Measured move extension based on multi-week base breakout.`,
+      t2Rationale: horizon === 'LONG_TERM'
+        ? `Multi-year trend extension based on market leadership in ${stock.sector}.`
+        : `Measured move extension based on multi-week base breakout.`,
       hardStopLoss: hardSL,
       stopLossLossPct: slPct,
-      trailingStopRule: `Once T1 (₹${t1}) is achieved, revise trailing stop to cost (₹${stock.cmp}) and trail daily low under 9 EMA.`,
+      trailingStopRule: trailingRule,
       riskRewardRatio: riskReward
     },
-    holdingPeriod: '4 - 8 Trading Days (Swing)',
+    holdingPeriod: defaultHolding,
     risksAndInvalidations: [
       `Strict Invalidation: A daily close below the 20 EMA (₹${stock.ema20}) or hard stop-loss of ₹${hardSL}.`,
       `Market Overhang: High India VIX surge above 17.5 triggering broader midcap index profit booking.`,

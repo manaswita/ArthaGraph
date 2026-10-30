@@ -5,7 +5,8 @@ import {
   MarketRegimeState, 
   SectorPerformance, 
   LangGraphAgentState, 
-  LangGraphNodeTrace 
+  LangGraphNodeTrace,
+  InvestmentHorizon
 } from '../types/stock';
 import { NSE_STOCKS, CURRENT_MARKET_REGIME, SECTOR_PERFORMANCE } from './marketData';
 import { synthesizeStockOpportunityWithGemini } from './geminiService';
@@ -14,6 +15,7 @@ import { synthesizeStockOpportunityWithGemini } from './geminiService';
 export const AgentStateAnnotation = Annotation.Root({
   scanId: Annotation<string>(),
   mode: Annotation<'BALANCED' | 'MOMENTUM_BREAKOUT' | 'EMA_PULLBACK' | 'HIGH_DELIVERY'>(),
+  horizon: Annotation<InvestmentHorizon>(),
   marketRegime: Annotation<MarketRegimeState>(),
   sectorPerformances: Annotation<SectorPerformance[]>(),
   screenedCandidates: Annotation<StockQuote[]>({
@@ -150,70 +152,98 @@ async function sectorMomentumNode(state: typeof AgentStateAnnotation.State) {
 async function nseScreenerNode(state: typeof AgentStateAnnotation.State) {
   const startTime = Date.now();
   const mode = state.mode || 'BALANCED';
+  const horizon = state.horizon || 'SWING';
   const logs: string[] = [
     `Executing multi-factor quantitative screener over NSE liquid universe (${NSE_STOCKS.length} equities).`,
-    `Scan Mode Active: ${mode}`
+    `Scan Mode Active: ${mode} | Investment Horizon: ${horizon}`
   ];
 
-  const candidates: StockQuote[] = [];
+  const scoredCandidates: Array<{ stock: StockQuote; reason: string; score: number }> = [];
 
   for (const stock of NSE_STOCKS) {
     let qualifies = false;
     let reason = '';
+    let score = 50;
 
     const isAboveEma20 = stock.cmp > stock.ema20;
+    const isAboveEma50 = stock.cmp > stock.ema50;
+    const isAboveEma200 = stock.cmp > stock.ema200;
     const isEma20Above50 = stock.ema20 > stock.ema50;
-    const isGoodRsi = stock.rsi14 >= 52 && stock.rsi14 <= 74;
+    const isGoodRsi = stock.rsi14 >= 50 && stock.rsi14 <= 74;
     const hasVolume = stock.volumeMultiple >= 1.4;
     const hasDelivery = stock.deliveryPercent >= 52;
 
-    if (mode === 'MOMENTUM_BREAKOUT') {
-      if (stock.volumeMultiple >= 1.8 && stock.distanceFrom52WHigh <= 10 && stock.rsi14 >= 58) {
-        qualifies = true;
-        reason = `Momentum volume breakout (${stock.volumeMultiple}x)`;
+    if (horizon === 'LONG_TERM') {
+      // Long-term compounding demands structural health above 200 EMA, high institutional delivery & leadership
+      if (isAboveEma200 && isAboveEma50) {
+        if (stock.deliveryPercent >= 55 || stock.marketCapCr >= 50000) {
+          qualifies = true;
+          score = (stock.deliveryPercent * 0.8) + (isEma20Above50 ? 25 : 10);
+          reason = `Structural 200 EMA leadership with ${stock.deliveryPercent}% delivery backing`;
+        }
       }
-    } else if (mode === 'EMA_PULLBACK') {
-      const nearEma20 = Math.abs(stock.cmp - stock.ema20) / stock.cmp <= 0.035;
-      if (nearEma20 && isEma20Above50 && stock.rsi14 >= 50 && stock.rsi14 <= 64) {
+    } else if (horizon === 'SHORT_TERM') {
+      // Short-term positional (1-3 months) demands sustained 50 EMA trend & steady momentum
+      if (isAboveEma50 && isEma20Above50 && stock.rsi14 >= 52) {
         qualifies = true;
-        reason = `20 EMA sweetspot pullback in strong uptrend`;
-      }
-    } else if (mode === 'HIGH_DELIVERY') {
-      if (stock.deliveryPercent >= 60 && stock.volumeMultiple >= 1.5) {
-        qualifies = true;
-        reason = `Institutional delivery spike (${stock.deliveryPercent}%)`;
+        score = (stock.volumeMultiple * 20) + (stock.rsi14 * 0.5) + (stock.deliveryPercent * 0.3);
+        reason = `Medium-term 50 EMA trend alignment with solid institutional participation`;
       }
     } else {
-      // BALANCED
-      if (isAboveEma20 && isGoodRsi && (hasVolume || hasDelivery)) {
-        qualifies = true;
-        reason = `Trend alignment with volume or delivery support`;
+      // SWING (3-8 days)
+      if (mode === 'MOMENTUM_BREAKOUT') {
+        if (stock.volumeMultiple >= 1.8 && stock.distanceFrom52WHigh <= 10 && stock.rsi14 >= 58) {
+          qualifies = true;
+          score = stock.volumeMultiple * 30 + (100 - stock.distanceFrom52WHigh);
+          reason = `Momentum volume breakout (${stock.volumeMultiple}x)`;
+        }
+      } else if (mode === 'EMA_PULLBACK') {
+        const nearEma20 = Math.abs(stock.cmp - stock.ema20) / stock.cmp <= 0.035;
+        if (nearEma20 && isEma20Above50 && stock.rsi14 >= 50 && stock.rsi14 <= 64) {
+          qualifies = true;
+          score = 80 + (5 - Math.abs(stock.cmp - stock.ema20) / stock.cmp * 100);
+          reason = `20 EMA sweetspot pullback in strong uptrend`;
+        }
+      } else if (mode === 'HIGH_DELIVERY') {
+        if (stock.deliveryPercent >= 60 && stock.volumeMultiple >= 1.5) {
+          qualifies = true;
+          score = stock.deliveryPercent + stock.volumeMultiple * 10;
+          reason = `Institutional delivery spike (${stock.deliveryPercent}%)`;
+        }
+      } else {
+        // BALANCED
+        if (isAboveEma20 && isGoodRsi && (hasVolume || hasDelivery)) {
+          qualifies = true;
+          score = (stock.volumeMultiple * 20) + (stock.deliveryPercent * 0.5) + (stock.rsi14 * 0.3);
+          reason = `Trend alignment with volume or delivery support`;
+        }
       }
     }
 
     if (qualifies) {
-      candidates.push(stock);
-      logs.push(`PASS: ${stock.symbol} (₹${stock.cmp}) - ${reason}`);
+      scoredCandidates.push({ stock, reason, score });
+      logs.push(`PASS: ${stock.symbol} (₹${stock.cmp}) - ${reason} [Score: ${Math.round(score)}]`);
     }
   }
 
-  // Ensure top quality candidates
-  const filtered = candidates.slice(0, 6);
+  // Sort by score descending and take top 6
+  scoredCandidates.sort((a, b) => b.score - a.score);
+  const filtered = scoredCandidates.slice(0, 6).map(c => c.stock);
 
   const trace = createTrace(
     'nse_screener_node',
     'NSE Multi-Factor Screener',
-    'Filters NSE equities using volume multiples, delivery %, EMA trend alignment, and RSI constraints.',
+    `Filters NSE equities tailored to ${horizon} horizon using volume multiples, delivery %, EMA trend alignment, and RSI constraints.`,
     startTime,
     logs,
-    { totalUniverseCount: NSE_STOCKS.length, scanMode: mode },
+    { totalUniverseCount: NSE_STOCKS.length, scanMode: mode, horizon },
     { qualifiedCount: filtered.length, symbols: filtered.map(s => s.symbol) }
   );
 
   return {
     screenedCandidates: filtered,
     graphTraces: [trace],
-    logs: [`[nse_screener_node] Qualified ${filtered.length} candidates: ${filtered.map(s => s.symbol).join(', ')}`]
+    logs: [`[nse_screener_node] Qualified ${filtered.length} ${horizon} candidates: ${filtered.map(s => s.symbol).join(', ')}`]
   };
 }
 
@@ -221,8 +251,9 @@ async function nseScreenerNode(state: typeof AgentStateAnnotation.State) {
 async function deepTechnicalValidationNode(state: typeof AgentStateAnnotation.State) {
   const startTime = Date.now();
   const candidates = state.screenedCandidates || [];
+  const horizon = state.horizon || 'SWING';
   const logs: string[] = [
-    `Performing deep technical chart pattern & structural analysis on ${candidates.length} candidates.`
+    `Performing deep technical chart pattern & structural analysis on ${candidates.length} candidates (${horizon}).`
   ];
 
   const evaluations: Array<{
@@ -238,7 +269,11 @@ async function deepTechnicalValidationNode(state: typeof AgentStateAnnotation.St
     let score = 75;
     let notes = '';
 
-    if (stock.distanceFrom52WHigh <= 5.0 && stock.volumeMultiple >= 2.0) {
+    if (horizon === 'LONG_TERM') {
+      setupType = stock.deliveryPercent >= 60 ? 'High Delivery Accumulation' : 'Long Term Compounding Base';
+      score = 90;
+      notes = `Structural compounding base anchored above 200 EMA (₹${stock.ema200}) with institutional delivery backing`;
+    } else if (stock.distanceFrom52WHigh <= 5.0 && stock.volumeMultiple >= 2.0) {
       setupType = 'Momentum Breakout';
       score = 92;
       notes = '52-Week High Breakout retest with massive 2x+ volume expansion';
@@ -268,7 +303,7 @@ async function deepTechnicalValidationNode(state: typeof AgentStateAnnotation.St
       notes
     });
 
-    logs.push(`EVAL ${stock.symbol}: Classified as [${setupType}] (Technical Score: ${score}/100) - ${notes}`);
+    logs.push(`EVAL ${stock.symbol}: Classified as [${setupType}] (Score: ${score}/100) - ${notes}`);
   }
 
   const trace = createTrace(
@@ -277,14 +312,14 @@ async function deepTechnicalValidationNode(state: typeof AgentStateAnnotation.St
     'Computes structural support/resistance, candlestick pattern confirmation, and setup taxonomy.',
     startTime,
     logs,
-    { candidateCount: candidates.length },
+    { candidateCount: candidates.length, horizon },
     { evaluations: evaluations.map(e => ({ symbol: e.symbol, setup: e.setupType, score: e.score })) }
   );
 
   return {
     deepTechnicalEvaluations: evaluations,
     graphTraces: [trace],
-    logs: [`[deep_technical_node] Validated all ${evaluations.length} setups`]
+    logs: [`[deep_technical_node] Validated all ${evaluations.length} setups for ${horizon} horizon`]
   };
 }
 
@@ -292,8 +327,9 @@ async function deepTechnicalValidationNode(state: typeof AgentStateAnnotation.St
 async function riskInvalidationNode(state: typeof AgentStateAnnotation.State) {
   const startTime = Date.now();
   const candidates = state.screenedCandidates || [];
+  const horizon = state.horizon || 'SWING';
   const logs: string[] = [
-    `Computing dynamic ATR-based Hard Stop-Loss and risk-to-reward parameters.`,
+    `Computing dynamic ATR-based Hard Stop-Loss and risk-to-reward parameters for horizon [${horizon}].`,
     `Verifying minimum institutional R:R threshold (Must be >= 1:2.0).`
   ];
 
@@ -305,34 +341,46 @@ async function riskInvalidationNode(state: typeof AgentStateAnnotation.State) {
   }> = [];
 
   for (const stock of candidates) {
-    const sl = Math.round((stock.cmp - (stock.atr14 * 1.5)) * 10) / 10;
+    let sl: number;
+    let invalidation: string;
+
+    if (horizon === 'LONG_TERM') {
+      sl = Math.round(Math.min(stock.cmp - (stock.atr14 * 3.5), stock.ema200 * 0.96) * 10) / 10;
+      invalidation = `Weekly close below 200 EMA (₹${stock.ema200}) or break of multi-month structural base at ₹${sl}`;
+    } else if (horizon === 'SHORT_TERM') {
+      sl = Math.round(Math.min(stock.cmp - (stock.atr14 * 2.2), stock.ema50 * 0.98) * 10) / 10;
+      invalidation = `Daily close below 50 EMA (₹${stock.ema50}) or break of swing low at ₹${sl}`;
+    } else {
+      sl = Math.round((stock.cmp - (stock.atr14 * 1.5)) * 10) / 10;
+      invalidation = `Close below 20 EMA (₹${stock.ema20}) or break of swing low at ₹${sl}`;
+    }
+
     const riskPct = Math.round(((stock.cmp - sl) / stock.cmp) * 1000) / 10;
-    const invalidation = `Close below 20 EMA (₹${stock.ema20}) or break of swing low at ₹${sl}`;
 
     riskEvals.push({
       symbol: stock.symbol,
       slPrice: sl,
-      riskScore: riskPct <= 3.5 ? 90 : 80,
+      riskScore: riskPct <= 4.5 ? 90 : 80,
       invalidationTrigger: invalidation
     });
 
-    logs.push(`RISK ${stock.symbol}: Hard SL ₹${sl} (-${riskPct}%), Invalidation: ${invalidation}`);
+    logs.push(`RISK ${stock.symbol} (${horizon}): Hard SL ₹${sl} (-${riskPct}%), Invalidation: ${invalidation}`);
   }
 
   const trace = createTrace(
     'risk_invalidation_node',
     'Risk, Stop-Loss & Invalidation Engine',
-    'Enforces mandatory 1:2+ risk/reward ratio, calculates ATR-based stop limits, and defines clear trade invalidation criteria.',
+    `Enforces mandatory risk/reward ratio, calculates ${horizon}-tailored stop limits, and defines clear trade invalidation criteria.`,
     startTime,
     logs,
-    { candidatesEvaluated: candidates.length },
+    { candidatesEvaluated: candidates.length, horizon },
     { riskProfiles: riskEvals.map(r => ({ symbol: r.symbol, sl: r.slPrice })) }
   );
 
   return {
     riskEvaluations: riskEvals,
     graphTraces: [trace],
-    logs: [`[risk_invalidation_node] Enforced risk limits for ${riskEvals.length} candidates`]
+    logs: [`[risk_invalidation_node] Enforced risk limits for ${riskEvals.length} candidates (${horizon})`]
   };
 }
 
@@ -342,35 +390,36 @@ async function geminiSynthesisNode(state: typeof AgentStateAnnotation.State) {
   const candidates = state.screenedCandidates || [];
   const techEvals = state.deepTechnicalEvaluations || [];
   const regime = state.marketRegime || CURRENT_MARKET_REGIME;
+  const horizon = state.horizon || 'SWING';
 
   const logs: string[] = [
-    `Invoking Gemini API (gemini-3.8-flash) server-side to generate institutional swing trading roadmaps.`,
-    `Processing ${candidates.length} candidate setups with full context (OHLC, EMA, RSI, Volume, Regime).`
+    `Invoking Gemini API (gemini-3.8-flash) server-side to generate institutional ${horizon} trade roadmaps.`,
+    `Processing ${candidates.length} candidate setups with full context (OHLC, EMA, RSI, Volume, Regime, Horizon: ${horizon}).`
   ];
 
   const shortlist: StockOpportunity[] = await Promise.all(
     candidates.map(async (stock) => {
       const matchingEval = techEvals.find(e => e.symbol === stock.symbol);
-      const setupType = matchingEval?.setupType || 'Momentum Breakout';
-      logs.push(`Synthesizing trade thesis for ${stock.symbol} (${setupType})...`);
-      return await synthesizeStockOpportunityWithGemini(stock, setupType, regime);
+      const setupType = matchingEval?.setupType || (horizon === 'LONG_TERM' ? 'Long Term Compounding Base' : 'Momentum Breakout');
+      logs.push(`Synthesizing trade thesis for ${stock.symbol} (${setupType}, ${horizon})...`);
+      return await synthesizeStockOpportunityWithGemini(stock, setupType, regime, horizon);
     })
   );
 
   const trace = createTrace(
     'gemini_synthesis_node',
     'Gemini Intelligence & Trade Thesis Synthesis',
-    'Generates human-readable institutional rationale, precise entry rules, target roadmaps, holding period, and supporting evidence.',
+    `Generates human-readable institutional rationale, precise entry rules, target roadmaps, holding period, and supporting evidence for ${horizon}.`,
     startTime,
     logs,
-    { candidateCount: candidates.length, model: 'gemini-3.8-flash' },
+    { candidateCount: candidates.length, model: 'gemini-3.8-flash', horizon },
     { generatedOpportunities: shortlist.map(s => ({ symbol: s.symbol, confidence: s.confidencePercent })) }
   );
 
   return {
     finalShortlist: shortlist,
     graphTraces: [trace],
-    logs: [`[gemini_synthesis_node] Successfully synthesized ${shortlist.length} institutional trade theses`]
+    logs: [`[gemini_synthesis_node] Successfully synthesized ${shortlist.length} institutional trade theses (${horizon})`]
   };
 }
 
@@ -378,8 +427,9 @@ async function geminiSynthesisNode(state: typeof AgentStateAnnotation.State) {
 async function dailyShortlistCompilerNode(state: typeof AgentStateAnnotation.State) {
   const startTime = Date.now();
   const shortlist = state.finalShortlist || [];
+  const horizon = state.horizon || 'SWING';
   const logs: string[] = [
-    `Compiling final Daily Intelligence Briefing.`,
+    `Compiling final Daily Intelligence Briefing (${horizon}).`,
     `Sorting opportunities by quantitative confidence score.`,
     `Generating position sizing and capital allocation metrics.`
   ];
@@ -390,10 +440,10 @@ async function dailyShortlistCompilerNode(state: typeof AgentStateAnnotation.Sta
   const trace = createTrace(
     'daily_shortlist_node',
     'Daily Output Compiler & Intelligence Report',
-    'Finalizes daily output containing entry conditions, stop-loss scenarios, holding period, and invalidations.',
+    `Finalizes daily output containing entry conditions, stop-loss scenarios, holding period, and invalidations for ${horizon}.`,
     startTime,
     logs,
-    { totalOpportunities: sorted.length },
+    { totalOpportunities: sorted.length, horizon },
     { topPicks: sorted.map(s => `${s.symbol} (${s.confidencePercent}%)`) }
   );
 
@@ -401,7 +451,7 @@ async function dailyShortlistCompilerNode(state: typeof AgentStateAnnotation.Sta
     finalShortlist: sorted,
     status: 'COMPLETED' as const,
     graphTraces: [trace],
-    logs: [`[daily_shortlist_node] Daily Briefing compiled with ${sorted.length} shortlisted stocks.`]
+    logs: [`[daily_shortlist_node] Daily Briefing compiled with ${sorted.length} shortlisted stocks (${horizon}).`]
   };
 }
 
@@ -441,7 +491,8 @@ export function createStockIntelligenceGraph() {
 
 // Run the LangGraph agent end-to-end
 export async function runStockIntelligenceScan(
-  mode: 'BALANCED' | 'MOMENTUM_BREAKOUT' | 'EMA_PULLBACK' | 'HIGH_DELIVERY' = 'BALANCED'
+  mode: 'BALANCED' | 'MOMENTUM_BREAKOUT' | 'EMA_PULLBACK' | 'HIGH_DELIVERY' = 'BALANCED',
+  horizon: InvestmentHorizon = 'SWING'
 ): Promise<LangGraphAgentState> {
   const scanId = `scan-${Date.now()}`;
   const graph = createStockIntelligenceGraph();
@@ -450,9 +501,10 @@ export async function runStockIntelligenceScan(
   const initialState = {
     scanId,
     mode,
+    horizon,
     status: 'SCANNING' as const,
     graphTraces: [],
-    logs: [`Initiating autonomous LangGraph Stock Intelligence Agent (Scan ID: ${scanId})...`],
+    logs: [`Initiating autonomous LangGraph Stock Intelligence Agent (Scan ID: ${scanId}, Horizon: ${horizon})...`],
     finalShortlist: [],
     screenedCandidates: [],
     deepTechnicalEvaluations: [],
@@ -466,6 +518,7 @@ export async function runStockIntelligenceScan(
     return {
       scanId,
       mode,
+      horizon,
       marketRegime: finalState.marketRegime,
       sectorPerformances: finalState.sectorPerformances,
       screenedCandidates: finalState.screenedCandidates,
@@ -483,6 +536,7 @@ export async function runStockIntelligenceScan(
     return {
       scanId,
       mode,
+      horizon,
       finalShortlist: [],
       graphTraces: [],
       status: 'ERROR',

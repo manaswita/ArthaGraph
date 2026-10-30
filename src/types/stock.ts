@@ -81,6 +81,8 @@ export interface TargetScenario {
   riskRewardRatio: string; // e.g., "1 : 2.6"
 }
 
+export type InvestmentHorizon = 'SWING' | 'SHORT_TERM' | 'LONG_TERM';
+
 export interface StockOpportunity {
   id: string;
   symbol: string;
@@ -88,7 +90,8 @@ export interface StockOpportunity {
   sector: string;
   cmp: number;
   changePercent: number;
-  setupType: 'Momentum Breakout' | 'EMA 20 Pullback / Dip' | 'Cup & Handle Retest' | 'High Delivery Accumulation' | 'S/R Flip Swing' | 'Squeeze Breakout';
+  setupType: 'Momentum Breakout' | 'EMA 20 Pullback / Dip' | 'Cup & Handle Retest' | 'High Delivery Accumulation' | 'S/R Flip Swing' | 'Squeeze Breakout' | 'Long Term Compounding Base';
+  horizon: InvestmentHorizon; // 'SWING' (1-2 weeks), 'SHORT_TERM' (1-3 months), 'LONG_TERM' (6-18+ months)
   
   // Mandatory Brief fields
   selectionReason: string; // Why the stock was selected
@@ -130,6 +133,7 @@ export interface LangGraphNodeTrace {
 export interface LangGraphAgentState {
   scanId: string;
   mode: 'BALANCED' | 'MOMENTUM_BREAKOUT' | 'EMA_PULLBACK' | 'HIGH_DELIVERY';
+  horizon?: InvestmentHorizon;
   marketRegime?: MarketRegimeState;
   sectorPerformances?: SectorPerformance[];
   screenedCandidates?: StockQuote[];

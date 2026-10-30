@@ -5,7 +5,8 @@ import {
   MarketIndexData, 
   SectorPerformance, 
   LangGraphNodeTrace,
-  StockQuote
+  StockQuote,
+  InvestmentHorizon
 } from './types/stock';
 import { MarketRegimeBanner } from './components/MarketRegimeBanner';
 import { StockCard } from './components/StockCard';
@@ -24,6 +25,8 @@ import {
   BookOpen,
   Filter,
   HelpCircle,
+  Clock,
+  TrendingUp,
   X
 } from 'lucide-react';
 
@@ -46,6 +49,44 @@ export const STRATEGY_DEFINITIONS = {
   }
 };
 
+export const HORIZON_DEFINITIONS: Record<InvestmentHorizon, {
+  label: string;
+  icon: string;
+  timeframe: string;
+  desc: string;
+  targetRange: string;
+  stopDistance: string;
+  badgeClass: string;
+}> = {
+  SWING: {
+    label: 'Swing',
+    icon: '⚡',
+    timeframe: '3–8 Days',
+    desc: 'Rapid momentum expansion and 20 EMA pullbacks. Tight 1.5x ATR stops to capture explosive 6%–12% moves.',
+    targetRange: '+6% to +14%',
+    stopDistance: '1.5x ATR',
+    badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200'
+  },
+  SHORT_TERM: {
+    label: 'Short Term',
+    icon: '📈',
+    timeframe: '1–3 Months',
+    desc: 'Positional trend continuation riding sectoral leadership and 50 EMA support for 12%–25% compounding gains.',
+    targetRange: '+12% to +25%',
+    stopDistance: '2.2x ATR / 50 EMA',
+    badgeClass: 'bg-amber-50 text-amber-800 border-amber-200'
+  },
+  LONG_TERM: {
+    label: 'Long Term',
+    icon: '💎',
+    timeframe: '6–18+ Months',
+    desc: 'High-conviction structural compounders backed by >55-65% delivery accumulation and anchored above rising 200 EMA.',
+    targetRange: '+35% to +70%+',
+    stopDistance: '3.5x ATR / 200 EMA',
+    badgeClass: 'bg-purple-50 text-purple-800 border-purple-200'
+  }
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<'shortlist' | 'architecture' | 'guide'>('shortlist');
   
@@ -57,6 +98,8 @@ export default function App() {
   const [graphTraces, setGraphTraces] = useState<LangGraphNodeTrace[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
   
+  // Horizon and Mode States
+  const [selectedHorizon, setSelectedHorizon] = useState<InvestmentHorizon>('SWING');
   const [scanMode, setScanMode] = useState<'BALANCED' | 'MOMENTUM_BREAKOUT' | 'EMA_PULLBACK' | 'HIGH_DELIVERY'>('BALANCED');
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [totalDurationMs, setTotalDurationMs] = useState<number | undefined>(undefined);
@@ -71,14 +114,14 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearching, setIsSearching] = useState<boolean>(false);
 
-  // Auto-refresh interval (5 minutes for swing trading, or manual)
+  // Auto-refresh interval (5 minutes, or manual)
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
   const [nextRefreshSec, setNextRefreshSec] = useState<number>(300);
 
   useEffect(() => {
     fetchMarketRegime();
     fetchStocksUniverse();
-    executeScan('BALANCED');
+    executeScan('BALANCED', 'SWING');
   }, []);
 
   // 5-minute background refresh timer for market data & shortlist
@@ -88,7 +131,7 @@ export default function App() {
       setNextRefreshSec((prev) => {
         if (prev <= 1) {
           fetchMarketRegime();
-          executeScan(scanMode);
+          executeScan(scanMode, selectedHorizon);
           return 300; // Reset to 5 minutes
         }
         return prev - 1;
@@ -96,7 +139,7 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [autoRefresh, scanMode]);
+  }, [autoRefresh, scanMode, selectedHorizon]);
 
   const fetchMarketRegime = async () => {
     try {
@@ -124,13 +167,13 @@ export default function App() {
     }
   };
 
-  const executeScan = async (mode = scanMode) => {
+  const executeScan = async (mode = scanMode, horizon = selectedHorizon) => {
     setIsScanning(true);
     try {
       const res = await fetch('/api/run-langgraph-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode })
+        body: JSON.stringify({ mode, horizon })
       });
 
       if (res.ok) {
@@ -156,7 +199,10 @@ export default function App() {
       const res = await fetch(`/api/analyze-stock/${symbol.trim().toUpperCase()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ setupType: 'Momentum Breakout' })
+        body: JSON.stringify({ 
+          setupType: selectedHorizon === 'LONG_TERM' ? 'Long Term Compounding Base' : 'Momentum Breakout',
+          horizon: selectedHorizon
+        })
       });
 
       if (res.ok) {
@@ -176,9 +222,10 @@ export default function App() {
 
   const downloadBriefing = () => {
     if (!shortlist.length) return;
-    let content = `INDIAN STOCK MARKET INTELLIGENCE - DAILY SHORTLIST\nGenerated: ${new Date().toLocaleString('en-IN')}\n\n`;
+    let content = `INDIAN STOCK MARKET INTELLIGENCE - DAILY SHORTLIST\nHorizon: ${selectedHorizon} (${HORIZON_DEFINITIONS[selectedHorizon].timeframe})\nGenerated: ${new Date().toLocaleString('en-IN')}\n\n`;
     shortlist.forEach((s, i) => {
       content += `[${i + 1}] ${s.symbol} (${s.name}) - ₹${s.cmp}\n`;
+      content += `Horizon: ${s.horizon || selectedHorizon} | Setup: ${s.setupType}\n`;
       content += `Why Selected: ${s.selectionReason}\n`;
       content += `Entry: ${s.entryConditions.join(' | ')}\n`;
       content += `Target 1: ₹${s.targetsAndStopLoss.t1} (+${s.targetsAndStopLoss.t1GainPct}%) | Target 2: ₹${s.targetsAndStopLoss.t2} (+${s.targetsAndStopLoss.t2GainPct}%)\n`;
@@ -336,150 +383,228 @@ export default function App() {
         )}
 
         {/* TAB 1: DAILY STOCK SHORTLIST */}
-        {activeTab === 'shortlist' && (
-          <div className="space-y-5 animate-fade-in">
-            {/* Filter & Quick Ticker Search Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-white border border-blue-100 rounded-2xl shadow-xs">
-              {/* Presets with Quick Info Tooltip trigger */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-slate-600 font-bold mr-1 flex items-center gap-1">
-                  <Filter className="w-3.5 h-3.5 text-blue-600" /> Scan Setup:
-                </span>
-                {[
-                  { id: 'BALANCED', label: 'Balanced' },
-                  { id: 'MOMENTUM_BREAKOUT', label: 'Volume Breakouts' },
-                  { id: 'EMA_PULLBACK', label: '20 EMA Dips' },
-                  { id: 'HIGH_DELIVERY', label: 'High Delivery' },
-                ].map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      setScanMode(p.id as any);
-                      executeScan(p.id as any);
-                    }}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      scanMode === p.id
-                        ? 'bg-blue-600 text-white shadow-2xs'
-                        : 'bg-blue-50/80 text-blue-900 hover:bg-blue-100 border border-blue-200'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
+        {activeTab === 'shortlist' && (() => {
+          const displayedStocks = shortlist.filter(s => !s.horizon || s.horizon === selectedHorizon);
+          const activeList = displayedStocks.length > 0 ? displayedStocks : shortlist;
 
-                {/* Explainer trigger */}
+          return (
+            <div className="space-y-5 animate-fade-in">
+              {/* 3 INVESTMENT HORIZON SELECTION BAR */}
+              <div className="bg-white border border-blue-200 rounded-2xl p-4 shadow-xs space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-slate-900 font-mono flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-blue-600" />
+                      Investment Horizon:
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+                      Select your holding timeframe to tune stops, targets & stock selection
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold text-blue-800 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
+                    Active: {HORIZON_DEFINITIONS[selectedHorizon].label} ({HORIZON_DEFINITIONS[selectedHorizon].timeframe})
+                  </span>
+                </div>
+
+                {/* The 3 Interactive Horizon Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {(['SWING', 'SHORT_TERM', 'LONG_TERM'] as InvestmentHorizon[]).map((hKey) => {
+                    const h = HORIZON_DEFINITIONS[hKey];
+                    const isSelected = selectedHorizon === hKey;
+                    return (
+                      <button
+                        key={hKey}
+                        onClick={() => {
+                          setSelectedHorizon(hKey);
+                          executeScan(scanMode, hKey);
+                        }}
+                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative ${
+                          isSelected
+                            ? hKey === 'LONG_TERM'
+                              ? 'bg-purple-50/90 border-purple-400 shadow-xs ring-2 ring-purple-300/60'
+                              : hKey === 'SHORT_TERM'
+                              ? 'bg-amber-50/90 border-amber-400 shadow-xs ring-2 ring-amber-300/60'
+                              : 'bg-emerald-50/90 border-emerald-400 shadow-xs ring-2 ring-emerald-300/60'
+                            : 'bg-slate-50/60 border-blue-100 hover:border-blue-200 hover:bg-blue-50/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
+                            <span className="text-base">{h.icon}</span>
+                            <span>{h.label}</span>
+                          </div>
+                          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                            isSelected
+                              ? 'bg-white text-slate-900 border-slate-300 shadow-2xs'
+                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                          }`}>
+                            {h.timeframe}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
+                          {h.desc}
+                        </p>
+                        <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] font-mono">
+                          <span className="text-slate-500">Targets: <b className="text-slate-800">{h.targetRange}</b></span>
+                          <span className="text-slate-500">SL: <b className="text-slate-800">{h.stopDistance}</b></span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Filter & Quick Ticker Search Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-white border border-blue-100 rounded-2xl shadow-xs">
+                {/* Presets with Quick Info Tooltip trigger */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-slate-600 font-bold mr-1 flex items-center gap-1">
+                    <Filter className="w-3.5 h-3.5 text-blue-600" /> Strategy:
+                  </span>
+                  {[
+                    { id: 'BALANCED', label: 'Balanced' },
+                    { id: 'MOMENTUM_BREAKOUT', label: 'Volume Breakouts' },
+                    { id: 'EMA_PULLBACK', label: '20 EMA Dips' },
+                    { id: 'HIGH_DELIVERY', label: 'High Delivery' },
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setScanMode(p.id as any);
+                        executeScan(p.id as any, selectedHorizon);
+                      }}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        scanMode === p.id
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'bg-blue-50/80 text-blue-900 hover:bg-blue-100 border border-blue-200'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+
+                  {/* Explainer trigger */}
+                  <button
+                    onClick={() => setShowStrategyModal(true)}
+                    className="p-1 rounded-full text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition-colors ml-1 cursor-pointer"
+                    title="What do Balanced, Volume Breakouts, 20 EMA Dips, and High Delivery mean?"
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* On-Demand Stock Analyzer Box */}
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="relative flex-1 sm:w-64">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-blue-600" />
+                    <input
+                      type="text"
+                      placeholder={`Analyze stock for ${HORIZON_DEFINITIONS[selectedHorizon].label} (e.g. BEL)...`}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSearchStock(searchQuery);
+                      }}
+                      title="Type any NSE stock symbol to generate an on-demand AI trading plan"
+                      className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-blue-200 rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white uppercase font-mono shadow-2xs"
+                    />
+                  </div>
+                  {searchQuery ? (
+                    <button
+                      onClick={() => handleSearchStock(searchQuery)}
+                      disabled={isSearching}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0 shadow-2xs"
+                    >
+                      {isSearching ? 'Analyzing...' : 'Analyze'}
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-slate-400 hidden xl:inline">
+                      (On-Demand AI)
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Active Setup Info Banner */}
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-950 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-blue-900">Active Scan:</span>
+                  <span className="font-semibold underline decoration-blue-400">
+                    {HORIZON_DEFINITIONS[selectedHorizon].label} ({HORIZON_DEFINITIONS[selectedHorizon].timeframe})
+                  </span>
+                  <span className="text-slate-400">•</span>
+                  <span className="font-semibold">
+                    {STRATEGY_DEFINITIONS[scanMode].title}
+                  </span>
+                  <span className="text-slate-600 hidden md:inline">— {STRATEGY_DEFINITIONS[scanMode].desc}</span>
+                </div>
                 <button
                   onClick={() => setShowStrategyModal(true)}
-                  className="p-1 rounded-full text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition-colors ml-1 cursor-pointer"
-                  title="What do Balanced, Volume Breakouts, 20 EMA Dips, and High Delivery mean?"
+                  className="text-[11px] font-bold text-blue-700 hover:underline cursor-pointer"
                 >
-                  <HelpCircle className="w-4 h-4" />
+                  Learn more about setups & horizons →
                 </button>
               </div>
 
-              {/* On-Demand Stock Analyzer Box */}
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <div className="relative flex-1 sm:w-64">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-blue-600" />
-                  <input
-                    type="text"
-                    placeholder="Analyze any stock (e.g. BEL, HAL)..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSearchStock(searchQuery);
-                    }}
-                    title="Type any NSE stock symbol to generate an on-demand AI trading plan"
-                    className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-blue-200 rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white uppercase font-mono shadow-2xs"
-                  />
-                </div>
-                {searchQuery ? (
-                  <button
-                    onClick={() => handleSearchStock(searchQuery)}
-                    disabled={isSearching}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0 shadow-2xs"
-                  >
-                    {isSearching ? 'Analyzing...' : 'Analyze'}
-                  </button>
-                ) : (
-                  <span className="text-[11px] text-slate-400 hidden xl:inline">
-                    (On-Demand AI)
+              {/* Shortlist Counter & Refresh Notice */}
+              <div className="flex flex-wrap items-center justify-between text-xs text-slate-600 px-1 gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-800">
+                    {HORIZON_DEFINITIONS[selectedHorizon].label} Shortlisted Opportunities:
                   </span>
-                )}
-              </div>
-            </div>
-
-            {/* Active Setup Info Banner */}
-            <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-950 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-blue-900">Current Strategy:</span>
-                <span className="font-semibold underline decoration-blue-400">
-                  {STRATEGY_DEFINITIONS[scanMode].title}
-                </span>
-                <span className="text-slate-600 hidden md:inline">— {STRATEGY_DEFINITIONS[scanMode].desc}</span>
-              </div>
-              <button
-                onClick={() => setShowStrategyModal(true)}
-                className="text-[11px] font-bold text-blue-700 hover:underline cursor-pointer"
-              >
-                Learn more about the 4 setups →
-              </button>
-            </div>
-
-            {/* Shortlist Counter & Refresh Notice */}
-            <div className="flex flex-wrap items-center justify-between text-xs text-slate-600 px-1 gap-2">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-800">Today&apos;s Shortlisted Opportunities:</span>
-                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-mono text-[11px] font-bold border border-blue-200">
-                  {shortlist.length} Stocks Selected
-                </span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {/* Auto-Refresh Status Pill */}
-                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 font-mono text-[11px]">
-                  <span className={`w-2 h-2 rounded-full ${autoRefresh ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
-                  <span className="text-slate-600">Auto-refresh:</span>
-                  <button 
-                    onClick={() => setAutoRefresh(!autoRefresh)}
-                    className="font-bold text-blue-700 hover:underline cursor-pointer"
-                    title="Toggle 5-minute auto-refresh"
-                  >
-                    {autoRefresh ? `${Math.floor(nextRefreshSec / 60)}m ${nextRefreshSec % 60}s` : 'Paused'}
-                  </button>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-mono text-[11px] font-bold border border-blue-200">
+                    {activeList.length} Stocks Matching
+                  </span>
                 </div>
 
-                {lastScanTime && (
-                  <span className="font-mono text-slate-500 text-[11px] hidden sm:inline">
-                    Updated: {lastScanTime} IST
-                  </span>
-                )}
-              </div>
-            </div>
+                <div className="flex items-center gap-3">
+                  {/* Auto-Refresh Status Pill */}
+                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 font-mono text-[11px]">
+                    <span className={`w-2 h-2 rounded-full ${autoRefresh ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                    <span className="text-slate-600">Auto-refresh:</span>
+                    <button 
+                      onClick={() => setAutoRefresh(!autoRefresh)}
+                      className="font-bold text-blue-700 hover:underline cursor-pointer"
+                      title="Toggle 5-minute auto-refresh"
+                    >
+                      {autoRefresh ? `${Math.floor(nextRefreshSec / 60)}m ${nextRefreshSec % 60}s` : 'Paused'}
+                    </button>
+                  </div>
 
-            {/* Shortlist Cards */}
-            {isScanning && shortlist.length === 0 ? (
-              <div className="bg-white border border-blue-100 rounded-2xl p-12 text-center space-y-3 shadow-xs">
-                <RefreshCw className="w-7 h-7 text-blue-600 animate-spin mx-auto" />
-                <div className="text-sm font-bold text-slate-900">Agent Scanning NSE Stock Universe...</div>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Evaluating 20 EMA pullbacks, volume breakouts, and computing exact stop-losses and targets.
-                </p>
+                  {lastScanTime && (
+                    <span className="font-mono text-slate-500 text-[11px] hidden sm:inline">
+                      Updated: {lastScanTime} IST
+                    </span>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div className="space-y-5">
-                {shortlist.map((stock) => (
-                  <StockCard
-                    key={stock.id}
-                    stock={stock}
-                    onOpenCalculator={(s) => setCalculatorStock(s)}
-                    onAskAi={() => setIsChatOpen(true)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+
+              {/* Shortlist Cards */}
+              {isScanning && activeList.length === 0 ? (
+                <div className="bg-white border border-blue-100 rounded-2xl p-12 text-center space-y-3 shadow-xs">
+                  <RefreshCw className="w-7 h-7 text-blue-600 animate-spin mx-auto" />
+                  <div className="text-sm font-bold text-slate-900">
+                    Scanning NSE Universe for {HORIZON_DEFINITIONS[selectedHorizon].label} Setups...
+                  </div>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    Computing {HORIZON_DEFINITIONS[selectedHorizon].timeframe} targets, dynamic stop-loss, and institutional thesis with Gemini AI.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {activeList.map((stock) => (
+                    <StockCard
+                      key={stock.id}
+                      stock={stock}
+                      onOpenCalculator={(s) => setCalculatorStock(s)}
+                      onAskAi={() => setIsChatOpen(true)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* TAB 2: TECHNICAL ARCHITECTURE & DEV GUIDE */}
         {activeTab === 'architecture' && (
@@ -509,10 +634,10 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900">
-                    What Are the 4 Scan Setups in Indian Stock Market Intelligence?
+                    Setups & Investment Horizons Guide
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Understanding the quantitative criteria behind each strategy
+                    How the Agent calibrates holding periods, stops, targets, and stock filters
                   </p>
                 </div>
               </div>
@@ -525,6 +650,38 @@ export default function App() {
             </div>
 
             <div className="space-y-3.5 text-xs text-slate-700">
+              {/* The 3 Horizons Overview */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-blue-200">
+                <span className="text-[10px] font-mono uppercase font-bold text-blue-800 block mb-1">
+                  ⏱️ The 3 Investment Horizons Explained
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                  <div className="p-2.5 bg-white rounded-lg border border-emerald-200">
+                    <span className="font-bold text-emerald-800 text-xs flex items-center gap-1">
+                      ⚡ Swing (3–8 Days)
+                    </span>
+                    <p className="text-[11px] text-slate-600 mt-1">
+                      Tight 1.5x ATR stops under 20 EMA. Aims for rapid 6%–14% tactical impulse moves.
+                    </p>
+                  </div>
+                  <div className="p-2.5 bg-white rounded-lg border border-amber-200">
+                    <span className="font-bold text-amber-800 text-xs flex items-center gap-1">
+                      📈 Short Term (1–3 Months)
+                    </span>
+                    <p className="text-[11px] text-slate-600 mt-1">
+                      2.2x ATR stops anchored below 50 EMA. Captures 12%–25% multi-week sectoral trend continuation.
+                    </p>
+                  </div>
+                  <div className="p-2.5 bg-white rounded-lg border border-purple-200">
+                    <span className="font-bold text-purple-800 text-xs flex items-center gap-1">
+                      💎 Long Term (6–18+ Months)
+                    </span>
+                    <p className="text-[11px] text-slate-600 mt-1">
+                      3.5x ATR stops anchored under 200 EMA. Targets 35%–70%+ structural wealth compounding.
+                    </p>
+                  </div>
+                </div>
+              </div>
               {/* 1. Balanced */}
               <div className="p-3.5 bg-blue-50/50 rounded-xl border border-blue-100">
                 <h4 className="font-bold text-blue-900 text-sm mb-1 flex items-center gap-1.5">
