@@ -158,3 +158,30 @@ export interface LangGraphAgentState {
   llmReasoningModel?: string;
   logs: string[];
 }
+
+export interface LiveQuote {
+  symbol: string;
+  name: string;
+  sector: string;
+  cmp: number;
+  previousClose: number;
+  change: number;
+  changePercent: number;
+  open: number;
+  dayHigh: number;
+  dayLow: number;
+  volume: number;
+  avgVolume20D: number;
+  deliveryPercent: number;
+  tickDirection: 'UP' | 'DOWN' | 'EQUAL';
+  lastUpdated: string;
+  source: 'NSE Live Feed' | 'NSE Market Stream';
+  marketStatus: 'OPEN' | 'CLOSED' | 'PRE_MARKET';
+}
+
+export interface MarketStatusInfo {
+  status: 'OPEN' | 'CLOSED' | 'PRE_MARKET';
+  label: string;
+  istTime: string;
+}
+

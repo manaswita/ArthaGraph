@@ -6,6 +6,7 @@ import { createServer as createViteServer } from 'vite';
 import { runStockIntelligenceScan } from './src/services/langgraphAgent';
 import { NSE_STOCKS, MARKET_INDICES, SECTOR_PERFORMANCE, CURRENT_MARKET_REGIME } from './src/services/marketData';
 import { synthesizeStockOpportunityWithGemini, askStockAgentFollowUp } from './src/services/geminiService';
+import { getLiveQuotes, pushManualTick, getIndianMarketStatus } from './src/services/liveNseService';
 
 dotenv.config();
 
@@ -40,6 +41,56 @@ app.get('/api/stocks', (req: Request, res: Response) => {
     count: NSE_STOCKS.length,
     stocks: NSE_STOCKS
   });
+});
+
+app.get('/api/live-quotes', async (req: Request, res: Response) => {
+  try {
+    const symbolsParam = req.query.symbols as string;
+    const symbols = symbolsParam ? symbolsParam.split(',').map(s => s.trim().toUpperCase()) : undefined;
+    const force = req.query.force === 'true';
+    const quotes = await getLiveQuotes(symbols, force);
+    const marketInfo = getIndianMarketStatus();
+    res.json({
+      success: true,
+      marketInfo,
+      quotes,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('Live quotes error:', error);
+    res.status(500).json({ error: error?.message || 'Failed to fetch live quotes' });
+  }
+});
+
+app.post('/api/live-quotes/refresh', async (req: Request, res: Response) => {
+  try {
+    const { symbols } = req.body;
+    const quotes = await getLiveQuotes(symbols, true);
+    res.json({
+      success: true,
+      quotes,
+      refreshedAt: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('Refresh quotes error:', error);
+    res.status(500).json({ error: error?.message || 'Failed to refresh quotes' });
+  }
+});
+
+app.post('/api/live-quotes/tick', (req: Request, res: Response) => {
+  try {
+    const { symbol, direction } = req.body;
+    if (!symbol) {
+      return res.status(400).json({ error: 'Symbol is required' });
+    }
+    const updated = pushManualTick(symbol.toUpperCase(), direction || 'UP');
+    if (!updated) {
+      return res.status(404).json({ error: `Symbol ${symbol} not found` });
+    }
+    res.json({ success: true, quote: updated });
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || 'Failed to push tick' });
+  }
 });
 
 app.post('/api/run-langgraph-scan', async (req: Request, res: Response) => {

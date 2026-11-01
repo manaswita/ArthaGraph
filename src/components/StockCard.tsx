@@ -20,9 +20,10 @@ interface StockCardProps {
   stock: StockOpportunity;
   onOpenCalculator: (stock: StockOpportunity) => void;
   onAskAi?: (stock: StockOpportunity) => void;
+  onTrackLive?: (stock: StockOpportunity) => void;
 }
 
-export const StockCard: React.FC<StockCardProps> = ({ stock, onOpenCalculator, onAskAi }) => {
+export const StockCard: React.FC<StockCardProps> = ({ stock, onOpenCalculator, onAskAi, onTrackLive }) => {
   const [showChart, setShowChart] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -273,6 +274,18 @@ ${stock.supportingEvidence.map(e => `✓ ${e}`).join('\n')}
         </button>
 
         <div className="flex flex-wrap items-center gap-2">
+          {onTrackLive && (
+            <button
+              onClick={() => onTrackLive(stock)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs"
+              title="Track live price, distance to Target 1 and Target 2"
+            >
+              <Target className="w-3.5 h-3.5 text-blue-100" />
+              <span>Track Live Targets</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
+            </button>
+          )}
+
           {onAskAi && (
             <button
               onClick={() => onAskAi(stock)}

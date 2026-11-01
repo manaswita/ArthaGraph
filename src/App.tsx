@@ -12,6 +12,7 @@ import { MarketRegimeBanner } from './components/MarketRegimeBanner';
 import { StockCard } from './components/StockCard';
 import { TechArchitectureTab } from './components/TechArchitectureTab';
 import { AgentGuideTab } from './components/AgentGuideTab';
+import { LiveNseDashboard } from './components/LiveNseDashboard';
 import { PositionCalculatorModal } from './components/PositionCalculatorModal';
 import { AgentChatDrawer } from './components/AgentChatDrawer';
 import { 
@@ -27,7 +28,9 @@ import {
   HelpCircle,
   Clock,
   TrendingUp,
-  X
+  X,
+  Radio,
+  Target
 } from 'lucide-react';
 
 export const STRATEGY_DEFINITIONS = {
@@ -88,7 +91,7 @@ export const HORIZON_DEFINITIONS: Record<InvestmentHorizon, {
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'shortlist' | 'architecture' | 'guide'>('shortlist');
+  const [activeTab, setActiveTab] = useState<'shortlist' | 'live_tracker' | 'architecture' | 'guide'>('shortlist');
   
   const [shortlist, setShortlist] = useState<StockOpportunity[]>([]);
   const [regime, setRegime] = useState<MarketRegimeState | null>(null);
@@ -315,10 +318,10 @@ export default function App() {
           </div>
         </div>
 
-        {/* 2. THE 3 LIGHT BLUE TABS */}
+        {/* 2. THE 4 NAVIGATION TABS */}
         <div className="max-w-5xl mx-auto mt-2 pt-2 border-t border-blue-100 flex items-center justify-between gap-2 overflow-x-auto">
           <div className="flex items-center gap-1 sm:gap-2">
-            {/* Tab 1: Daily Stock Shortlist */}
+            {/* Tab 1: Recommended Stocks (First & Default) */}
             <button
               onClick={() => setActiveTab('shortlist')}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
@@ -328,7 +331,7 @@ export default function App() {
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Daily Stock Shortlist</span>
+              <span>Recommended Stocks</span>
               {shortlist.length > 0 && (
                 <span className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
                   activeTab === 'shortlist' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-800'
@@ -338,7 +341,24 @@ export default function App() {
               )}
             </button>
 
-            {/* Tab 2: Technical Architecture & Dev Guide */}
+            {/* Tab 2: Track the reccomendations */}
+            <button
+              onClick={() => setActiveTab('live_tracker')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'live_tracker'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-blue-900 hover:bg-blue-50/80 border border-transparent'
+              }`}
+            >
+              <Radio className={`w-3.5 h-3.5 ${activeTab === 'live_tracker' ? 'text-white' : 'text-blue-600'}`} />
+              <span>Track the reccomendations</span>
+              <span className="flex h-2 w-2 relative ml-0.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+            </button>
+
+            {/* Tab 3: Technical Architecture & Dev Guide */}
             <button
               onClick={() => setActiveTab('architecture')}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
@@ -351,7 +371,7 @@ export default function App() {
               <span>Technical Architecture & Dev Guide</span>
             </button>
 
-            {/* Tab 3: Agent Guide & Methodology */}
+            {/* Tab 4: Agent Guide & Methodology */}
             <button
               onClick={() => setActiveTab('guide')}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
@@ -380,6 +400,27 @@ export default function App() {
             indices={indices}
             sectors={sectors}
           />
+        )}
+
+        {/* TAB 0: LIVE NSE TARGET TRACKER DASHBOARD */}
+        {activeTab === 'live_tracker' && (
+          <div className="animate-fade-in">
+            <LiveNseDashboard
+              recommendedStocks={shortlist.filter(s => !s.horizon || s.horizon === selectedHorizon).length > 0 
+                ? shortlist.filter(s => !s.horizon || s.horizon === selectedHorizon) 
+                : shortlist
+              }
+              allUniverseStocks={allStocks}
+              selectedHorizon={selectedHorizon}
+              onSelectHorizon={(h) => {
+                setSelectedHorizon(h);
+                executeScan(scanMode, h);
+              }}
+              onOpenCalculator={(stock) => setCalculatorStock(stock)}
+              onOpenChat={(symbol) => setIsChatOpen(true)}
+              onTriggerScan={() => executeScan(scanMode, selectedHorizon)}
+            />
+          </div>
         )}
 
         {/* TAB 1: DAILY STOCK SHORTLIST */}
@@ -598,6 +639,7 @@ export default function App() {
                       stock={stock}
                       onOpenCalculator={(s) => setCalculatorStock(s)}
                       onAskAi={() => setIsChatOpen(true)}
+                      onTrackLive={() => setActiveTab('live_tracker')}
                     />
                   ))}
                 </div>

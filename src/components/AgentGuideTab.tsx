@@ -305,43 +305,59 @@ export const AgentGuideTab: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Guide to the 3 Tabs */}
+      {/* 2. Guide to the 4 Application Tabs */}
       <div className="bg-white border border-blue-100 rounded-2xl p-6 sm:p-7 shadow-xs space-y-4">
         <div className="flex items-center gap-2">
           <Info className="w-4 h-4 text-blue-600" />
           <h3 className="text-base font-bold text-slate-900">
-            Guide to the 3 Application Tabs
+            Guide to the 4 Application Tabs
           </h3>
         </div>
 
         <div className="grid grid-cols-1 gap-4 text-xs">
-          {/* Tab 1 */}
-          <div className="p-4 bg-blue-50/40 rounded-xl border border-blue-100 space-y-1.5">
+          {/* Tab 1: Recommended Stocks (First & Default) */}
+          <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-200 space-y-1.5">
             <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-bold text-xs flex items-center justify-center font-mono">1</span>
-              Tab 1: Daily Stock Shortlist
+              Tab 1: Recommended Stocks (First &amp; Default Tab)
             </h4>
             <p className="text-slate-700">
-              Your primary daily workspace. Displays the top 4 to 6 shortlisted NSE stocks complete with Why Selected, Entry conditions, Target 1, Target 2, hard ATR stop-loss, holding period, and the trade sizing calculator.
+              Your primary high-conviction opportunities workspace. Displays the filtered NSE stocks across Swing, Short Term, and Long Term horizons complete with Why Selected, 15-min entry triggers, Target 1 &amp; 2 rationale, holding period, and interactive price chart.
             </p>
           </div>
 
-          {/* Tab 2 */}
+          {/* Tab 2: Track the reccomendations */}
+          <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-200 space-y-1.5">
+            <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-emerald-600 text-white font-bold text-xs flex items-center justify-center font-mono">2</span>
+              Tab 2: Track the reccomendations (Live NSE Target Tracker)
+            </h4>
+            <p className="text-slate-700">
+              Streams real-time market quotes directly from NSE for every recommended stock, computing the <strong>Live Current Market Price (CMP)</strong> and dynamic proximity to both milestones:
+            </p>
+            <ul className="text-slate-600 space-y-1 pl-4 list-disc">
+              <li><strong>Target 1 (Conservative):</strong> Displays exact rupees remaining (e.g., `₹42.50 to go`), percentage needed from live CMP, visual 0–100% progress gauge, and proximity alerts (*Striking Distance &lt;1.5%* or *Target 1 Smashed!*).</li>
+              <li><strong>Target 2 (Extended Runner):</strong> Displays remaining distance to the extended runner level and trailing stop instructions.</li>
+              <li><strong>Stop-Loss Buffer &amp; Custom Position P&amp;L:</strong> Shows safe cushion % above hard stop loss and lets you type your actual bought quantity to track personal rupee profit/loss live!</li>
+            </ul>
+          </div>
+
+          {/* Tab 3: Technical Architecture & Dev Guide */}
           <div className="p-4 bg-blue-50/40 rounded-xl border border-blue-100 space-y-1.5">
             <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-bold text-xs flex items-center justify-center font-mono">2</span>
-              Tab 2: Technical Architecture & Dev Guide
+              <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-bold text-xs flex items-center justify-center font-mono">3</span>
+              Tab 3: Technical Architecture &amp; Dev Guide
             </h4>
             <p className="text-slate-700">
               Developer and quant reference. Features the interactive 7-node LangGraph Directed Acyclic Graph (DAG), execution latencies, input/output inspectors, and complete source code in TypeScript (@langchain/langgraph) and Python.
             </p>
           </div>
 
-          {/* Tab 3 */}
+          {/* Tab 4: Agent Guide & Methodology */}
           <div className="p-4 bg-blue-50/40 rounded-xl border border-blue-100 space-y-1.5">
             <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-bold text-xs flex items-center justify-center font-mono">3</span>
-              Tab 3: Agent Guide & Methodology (Current Tab)
+              <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-bold text-xs flex items-center justify-center font-mono">4</span>
+              Tab 4: Agent Guide &amp; Methodology (Current Tab)
             </h4>
             <p className="text-slate-700">
               The full explanation of the 4 scan setups (Balanced, Volume Breakouts, 20 EMA Dips, High Delivery), trading discipline rules (1:2+ R:R, gap-up caveats), and how the agent operates.

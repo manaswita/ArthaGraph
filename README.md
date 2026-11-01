@@ -60,9 +60,26 @@ The agent allows users to dynamically toggle between three distinct market holdi
 | **20 EMA Dips** | "Buy the dip" at key structural support in strong uptrends. | $\text{Uptrend intact}$, price within $2\%-3.5\%$ of 20 EMA, declining pullback volume, reversal hammer. | Conservative traders wanting low-risk entries ($1:2.5+$ R:R). |
 | **High Delivery** | Smart money accumulation with overnight Demat transfers. | $\text{Delivery \%} \ge 55\% - 70\%+$, rising price, low intraday churn. | Riding alongside Mutual Funds, FIIs, and DIIs. |
 
+### 1.5 Track the reccomendations (Live NSE Target Tracker Dashboard)
+
+The **Track the reccomendations** dashboard provides real-time tracking for all **Recommended Stocks**, streaming live prices from the exchange and calculating exact proximity to targets:
+
+- **Live Current Market Price (CMP):** Shows the real-time NSE price with directional micro-ticks (green/red flash), daily ₹ and % change, and day's high/low range.
+- **Distance to Target 1 (Conservative Milestone):**
+  - **In Rupees:** Exact rupee amount remaining to reach T1 (e.g., `₹42.50 to go` or `🎉 Smashed by +₹12.00`).
+  - **In Percentage:** Exact percentage move needed from the live CMP (e.g., `+1.85% needed`).
+  - **Visual Progress Bar:** Milestone completion meter showing journey from Entry (0%) to Target 1 (100%).
+  - **Proximity Alerts:** Automatically badges stocks in *Striking Distance (<1.5% away)* or *Target 1 Smashed!* so traders can lock in 50% partial profits.
+- **Distance to Target 2 (Extended Trend Runner):**
+  - Displays remaining distance in ₹ and % to the extended multi-week target.
+  - Guides trailing stop behavior (e.g. "Once T1 is achieved, trail stop-loss to cost to ride runner risk-free to T2").
+- **Stop-Loss Safety Buffer:** Live monitoring of cushion percentage above the hard stop-loss.
+- **Personal Position & Trade P&L Tracker:** Traders can enter their actual purchased quantity and fill price to compute real-time floating P&L, projected rupee profit at Target 1, and projected rupee profit at Target 2.
+- **Interactive Live Simulator:** Built-in $+0.4\%$ / $-0.4\%$ tick triggers to test real-time milestone transitions and notification badges.
+
 ---
 
-### 1.5 Interactive Follow-up AI Assistant
+### 1.6 Interactive Follow-up AI Assistant
 - Users can click **"Ask AI Follow-up"** or click **"Ask AI About [Stock]"** directly on any card.
 - Grounded in current market context, providing answers on entry timing, trailing rules, and sector rotation without giving blind financial advice.
 
@@ -176,6 +193,9 @@ $$\text{Recommended Quantity} = \left\lfloor \frac{\text{Max Risk Budget}}{\text
 | `GET` | `/api/health` | — | Health check, server status, Gemini API configuration verification. |
 | `GET` | `/api/market-regime` | — | Fetches Nifty 50, Bank Nifty, India VIX, FII/DII liquidity, and sector heatmap. |
 | `GET` | `/api/stocks` | — | Full universe of liquid NSE equities with technical metrics. |
+| `GET` | `/api/live-quotes` | `?symbols=...&force=...` | Streams real-time NSE market quotes, live CMP, day high/low, and IST market status. |
+| `POST` | `/api/live-quotes/refresh` | `{ symbols }` | Forces immediate external sync with NSE for recommended stocks. |
+| `POST` | `/api/live-quotes/tick` | `{ symbol, direction }` | Simulates an interactive tick move (`UP`/`DOWN`) to test real-time target progress. |
 | `POST` | `/api/run-langgraph-scan` | `{ mode, horizon }` | Executes LangGraph state machine end-to-end for chosen strategy and horizon (`SWING`, `SHORT_TERM`, `LONG_TERM`). |
 | `POST` | `/api/analyze-stock/:symbol` | `{ setupType, horizon }` | On-demand LangGraph evaluation for any single NSE stock (e.g., `BEL`, `HAL`, `TRENT`). |
 | `POST` | `/api/chat` | `{ message, history, context }` | Multi-turn conversational endpoint powered by `gemini-3.8-flash` with full context of today's shortlist and market regime. |
